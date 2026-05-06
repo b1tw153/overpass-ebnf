@@ -1,46 +1,45 @@
-(* ======================================================================= *)
-(* Overpass QL EBNF Grammar                                                *)
-(* ======================================================================= *)
-(* From https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL,      *)
-(* verified against the XML query schema and tested against the Overpass   *)
-(* API implementation (v0.7.62.11). Undocumented features accepted by the  *)
-(* implementation but absent from the wiki are excluded.                   *)
-(*                                                                         *)
-(* Extension: terminals may use regex character classes, e.g.              *)
-(*   digit ::= /[0-9]/                                                     *)
-(* ======================================================================= *)
+/* ======================================================================= */
+/* Overpass QL EBNF Grammar                                                */
+/* ======================================================================= */
+/* Notation: W3C EBNF defined in https://www.w3.org/TR/xml/#sec-notation   */
+/*                                                                         */
+/* Based on https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL,  */
+/* verified against the Overpass API source code and implementation        */
+/* (v0.7.62.11). Undocumented features accepted by the implementation but  */
+/* absent from the wiki are excluded.                                      */
+/* ======================================================================= */
 
-(* ----------------------------------------------------------------------- *)
-(* TOP LEVEL                                                               *)
-(* ----------------------------------------------------------------------- *)
+/* ----------------------------------------------------------------------- */
+/* TOP LEVEL                                                               */
+/* ----------------------------------------------------------------------- */
 
-query          ::= [ "[" global_setting "]" { "[" global_setting "]" } ";" ]
-                   { statement }
+query          ::= ( "[" global_setting "]" ( "[" global_setting "]" )* ";" )?
+                   statement*
 
-(* ----------------------------------------------------------------------- *)
-(* GLOBAL SETTINGS                                                         *)
-(* ----------------------------------------------------------------------- *)
+/* ----------------------------------------------------------------------- */
+/* GLOBAL SETTINGS                                                         */
+/* ----------------------------------------------------------------------- */
 
 global_setting ::= "timeout" ":" integer
                  | "maxsize" ":" integer
                  | "out" ":" output_format
                  | "bbox" ":" number "," number "," number "," number
                  | "date" ":" datetime_literal
-                 | "diff" ":" datetime_literal [ "," datetime_literal ]
-                 | "adiff" ":" datetime_literal [ "," datetime_literal ]
+                 | "diff" ":" datetime_literal ( "," datetime_literal )?
+                 | "adiff" ":" datetime_literal ( "," datetime_literal )?
 
 output_format  ::= "xml"
                  | "json"
                  | "csv" "(" csv_spec ")"
                  | "custom"
-                 | "popup" { "(" popup_config ")" }
+                 | "popup" ( "(" popup_config ")" )*
 
-(* See: https://dev.overpass-api.de/output_formats.html *)
-popup_config   ::= popup_token { ";" popup_token } [ ";" ]
-popup_token    ::= { string_literal | /[^;)"']/ }
+/* See: https://dev.overpass-api.de/output_formats.html */
+popup_config   ::= popup_token ( ";" popup_token )* ";"?
+popup_token    ::= ( string_literal | [^;)"'] )*
 
-csv_spec       ::= csv_field { "," csv_field }
-                   [ ";" boolean_literal [ ";" string_literal ] ]
+csv_spec       ::= csv_field ( "," csv_field )*
+                   ( ";" boolean_literal ( ";" string_literal )? )?
 
 csv_field            ::= "::" unquoted_csv_builtin
                        | "::" quoted_csv_builtin
@@ -56,9 +55,9 @@ csv_builtin_name     ::= unquoted_csv_builtin
                        | "count:nodes" | "count:ways"
                        | "count:relations" | "count:areas"
 
-(* ----------------------------------------------------------------------- *)
-(* STATEMENTS                                                              *)
-(* ----------------------------------------------------------------------- *)
+/* ----------------------------------------------------------------------- */
+/* STATEMENTS                                                              */
+/* ----------------------------------------------------------------------- */
 
 statement      ::= simple_stmt ";"
                  | block_stmt
@@ -82,19 +81,19 @@ block_stmt     ::= foreach_stmt
                  | if_stmt
                  | retro_stmt
 
-(* ----------------------------------------------------------------------- *)
-(* QUERY STATEMENT                                                         *)
-(* ----------------------------------------------------------------------- *)
+/* ----------------------------------------------------------------------- */
+/* QUERY STATEMENT                                                         */
+/* ----------------------------------------------------------------------- */
 
-query_stmt     ::= element_type { filter } [ "->" set_ref ]
+query_stmt     ::= element_type filter* ( "->" set_ref )?
 
 element_type   ::= "node" | "way" | "rel" | "relation"
                  | "nwr" | "nw" | "wr" | "nr"
                  | "area" | "derived"
 
-(* ----------------------------------------------------------------------- *)
-(* QUERY FILTERS                                                           *)
-(* ----------------------------------------------------------------------- *)
+/* ----------------------------------------------------------------------- */
+/* QUERY FILTERS                                                           */
+/* ----------------------------------------------------------------------- */
 
 filter         ::= tag_filter
                  | bbox_filter
@@ -115,132 +114,131 @@ filter         ::= tag_filter
                  | pivot_filter
                  | if_filter
 
-tag_filter     ::= "[" tag_key "]"                                           (* key exists *)
-                 | "[" "!" tag_key "]"                                       (* key absent; v0.7.53+ *)
-                 | "[" tag_key "=" tag_value "]"                             (* equality *)
-                 | "[" tag_key "!=" tag_value "]"                            (* inequality *)
-                 | "[" tag_key "~" string_literal [ "," "i" ] "]"            (* regex match *)
-                 | "[" tag_key "!~" string_literal [ "," "i" ] "]"           (* regex non-match *)
-                 | "[" "~" string_literal "~" string_literal [ "," "i" ] "]" (* key+value regex *)
+tag_filter     ::= "[" tag_key "]"                                              /* key exists */
+                 | "[" "!" tag_key "]"                                          /* key absent; v0.7.53+ */
+                 | "[" tag_key "=" tag_value "]"                                /* equality */
+                 | "[" tag_key "!=" tag_value "]"                               /* inequality */
+                 | "[" tag_key "~" string_literal ( "," "i" )? "]"             /* regex match */
+                 | "[" tag_key "!~" string_literal ( "," "i" )? "]"            /* regex non-match */
+                 | "[" "~" string_literal "~" string_literal ( "," "i" )? "]"  /* key+value regex */
 
-(* Coordinates in bbox_filter are (south, west, north, east) *)
+/* Coordinates in bbox_filter are (south, west, north, east) */
 bbox_filter    ::= "(" number "," number "," number "," number ")"
 
-(* Single bare integer is a legacy shorthand for id: with one ID *)
+/* Single bare integer is a legacy shorthand for id: with one ID */
 id_filter      ::= "(" integer ")"
-                 | "(" "id" ":" integer { "," integer } ")"                (* v0.7.54+: multiple IDs *)
+                 | "(" "id" ":" integer ( "," integer )* ")"                /* v0.7.54+: multiple IDs */
 
-(* Radius in metres (non-negative).
+/* Radius in metres (non-negative).
    Set form: optional set_ref selects the reference geometry set.
    Point form: single lat/lon reference point (no set_ref).
-   Line form: polyline of two or more lat/lon points (no set_ref). *)
-around_set_filter   ::= "(" "around" [ set_ref ] ":" unsigned_number ")"
+   Line form: polyline of two or more lat/lon points (no set_ref). */
+around_set_filter   ::= "(" "around" set_ref? ":" unsigned_number ")"
 around_point_filter ::= "(" "around" ":" unsigned_number "," number "," number ")"
 around_line_filter  ::= "(" "around" ":" unsigned_number
                          "," number "," number
                          "," number "," number
-                         { "," number "," number } ")"
+                         ( "," number "," number )* ")"
 
-(* Polygon specified as a quoted sequence of whitespace-separated lat/lon pairs *)
+/* Polygon specified as a quoted sequence of whitespace-separated lat/lon pairs */
 polygon_filter ::= "(" "poly" ":" poly_string ")"
 
-poly_string    ::= '"' poly_vertex { poly_vertex } '"'
-                 | "'" poly_vertex { poly_vertex } "'"
+poly_string    ::= '"' poly_vertex+ '"'
+                 | "'" poly_vertex+ "'"
 
 poly_vertex    ::= number number
 
 newer_filter   ::= "(" "newer" ":" datetime_literal ")"
 
 changed_filter ::= "(" "changed" ":" datetime_literal
-                   [ "," datetime_literal ] ")"
+                   ( "," datetime_literal )? ")"
 
-user_filter    ::= "(" "user" ":" string_literal { "," string_literal } ")"
-                 | "(" "uid" ":" integer { "," integer } ")"
-                 | "(" "user_touched" ":" string_literal
-                       { "," string_literal } ")"
-                 | "(" "uid_touched" ":" integer { "," integer } ")"
+user_filter    ::= "(" "user" ":" string_literal ( "," string_literal )* ")"
+                 | "(" "uid" ":" integer ( "," integer )* ")"
+                 | "(" "user_touched" ":" string_literal ( "," string_literal )* ")"
+                 | "(" "uid_touched" ":" integer ( "," integer )* ")"
 
-(* Uses areas from the named set, or the default set if no qualifier *)
-area_set_filter ::= "(" "area" [ set_ref ] ")"
+/* Uses areas from the named set, or the default set if no qualifier */
+area_set_filter ::= "(" "area" set_ref? ")"
 
-(* Uses the area with this specific integer ID *)
+/* Uses the area with this specific integer ID */
 area_id_filter  ::= "(" "area" ":" integer ")"
 
-(* Recurse types:
+/* Recurse types:
      w   — parent ways of nodes in input set
      r   — parent relations of elements in input set
      bn  — node members of ways in input set
      bw  — way members of relations in input set
      br  — relation members of relations in input set
-   Optional role string restricts to relation members with that role *)
-recurse_filter ::= "(" recurse_type [ set_ref ] [ ":" string_literal ] ")"
+   Optional role string restricts to relation members with that role */
+recurse_filter ::= "(" recurse_type set_ref? ( ":" string_literal )? ")"
 
 recurse_type   ::= "w" | "r" | "bn" | "bw" | "br"
 
-(* int_range: exact count, or min- (min or more), or min-max (range) *)
+/* int_range: exact count, or min- (min or more), or min-max (range) */
 way_count_filter ::= "(" "way_cnt" ":" int_range ")"
 
 way_link_filter  ::= "(" "way_link" ":" int_range ")"
 
-int_range      ::= integer [ "-" [ integer ] ]
+int_range      ::= integer ( "-" integer? )?
 
-(* Multiple set_filters on a single query_stmt implement intersection *)
+/* Multiple set_filters on a single query_stmt implement intersection */
 set_filter     ::= "." set_name
 
-pivot_filter   ::= "(" "pivot" [ set_ref ] ")"
+pivot_filter   ::= "(" "pivot" set_ref? ")"
 
 if_filter      ::= "(" "if" ":" evaluator ")"
 
-(* ----------------------------------------------------------------------- *)
-(* BLOCK STATEMENTS                                                        *)
-(* ----------------------------------------------------------------------- *)
+/* ----------------------------------------------------------------------- */
+/* BLOCK STATEMENTS                                                        */
+/* ----------------------------------------------------------------------- */
 
-(* Block body: curly braces or parentheses are both accepted (except where
-   parentheses are already used for another purpose, as in complete_stmt) *)
-block_body     ::= "{" { statement } "}"
-                 | "(" { statement } ")"
+/* Block body: curly braces or parentheses are both accepted (except where
+   parentheses are already used for another purpose, as in complete_stmt) */
+block_body     ::= "{" statement* "}"
+                 | "(" statement* ")"
 
-(* Iterates once per element in the input set *)
-foreach_stmt   ::= "foreach" [ set_ref ] [ "->" set_ref ]
+/* Iterates once per element in the input set */
+foreach_stmt   ::= "foreach" set_ref? ( "->" set_ref )?
                    block_body
 
-(* Groups input set elements by evaluator value; iterates once per group.
-   Inside the body, <output_set>.val gives the current group's key value. *)
-for_stmt       ::= "for" [ set_ref ] [ "->" set_ref ]
+/* Groups input set elements by evaluator value; iterates once per group.
+   Inside the body, <output_set>.val gives the current group's key value. */
+for_stmt       ::= "for" set_ref? ( "->" set_ref )?
                    "(" evaluator ")"
                    block_body
 
-(* Repeats body until working set stops growing, up to max_iterations (default 4096) *)
-complete_stmt  ::= "complete" [ set_ref ] [ "->" set_ref ]
-                   [ "(" integer ")" ]
-                   "{" { statement } "}"
+/* Repeats body until working set stops growing, up to max_iterations (default 4096) */
+complete_stmt  ::= "complete" set_ref? ( "->" set_ref )?
+                   ( "(" integer ")" )?
+                   "{" statement* "}"
 
 if_stmt        ::= "if" "(" evaluator ")"
                    block_body
-                   [ "else" block_body ]
+                   ( "else" block_body )?
 
-(* Evaluator yields a timestamp; body executes as if querying at that date *)
+/* Evaluator yields a timestamp; body executes as if querying at that date */
 retro_stmt     ::= "retro" "(" evaluator ")"
                    block_body
 
-(* ----------------------------------------------------------------------- *)
-(* OTHER STATEMENTS                                                        *)
-(* ----------------------------------------------------------------------- *)
+/* ----------------------------------------------------------------------- */
+/* OTHER STATEMENTS                                                        */
+/* ----------------------------------------------------------------------- */
 
-(* Union collects results of all members; members prefixed with - are subtracted *)
-union_stmt     ::= "(" union_body ")" [ "->" set_ref ]
+/* Union collects results of all members; members prefixed with - are subtracted */
+union_stmt     ::= "(" union_body ")" ( "->" set_ref )?
 
-union_body     ::= { union_member }
+union_body     ::= union_member*
 
 union_member   ::= statement
                  | "-" statement
 
-(* Copies a named set into the default set (or just references it) *)
-item_stmt      ::= set_ref [ "->" set_ref ]
+/* Copies a named set into the default set (or just references it) */
+item_stmt      ::= set_ref ( "->" set_ref )?
 
-(* All tokens may appear in any order; integer is an output count limit;
-   each of integer and bbox_filter should appear at most once *)
-out_stmt       ::= [ set_ref ] "out" { out_token }
+/* All tokens may appear in any order; integer is an output count limit;
+   each of integer and bbox_filter should appear at most once */
+out_stmt       ::= set_ref? "out" out_token*
 
 out_token      ::= out_option | integer | bbox_filter
 
@@ -249,46 +247,46 @@ out_option     ::= "ids" | "skel" | "body" | "tags" | "meta" | "count"
                  | "noids"
                  | "asc" | "qt"
 
-recurse_stmt   ::= [ set_ref ] ( "<" | "<<" | ">" | ">>" )
-                   [ "->" set_ref ]
+recurse_stmt   ::= set_ref? ( "<" | "<<" | ">" | ">>" )
+                   ( "->" set_ref )?
 
-(* Without lat/lon, finds areas containing elements of the input set;
-   with lat/lon, finds areas containing that point *)
-is_in_stmt     ::= [ set_ref ] "is_in"
-                   [ "(" number "," number ")" ]
-                   [ "->" set_ref ]
+/* Without lat/lon, finds areas containing elements of the input set;
+   with lat/lon, finds areas containing that point */
+is_in_stmt     ::= set_ref? "is_in"
+                   ( "(" number "," number ")" )?
+                   ( "->" set_ref )?
 
-(* Retrieves the edit history of a single element; optional third arg is version *)
+/* Retrieves the edit history of a single element; optional third arg is version */
 timeline_stmt  ::= "timeline" "(" timeline_type "," integer
-                   [ "," integer ] ")" [ "->" set_ref ]
+                   ( "," integer )? ")" ( "->" set_ref )?
 
 timeline_type  ::= "node" | "way" | "relation"
 
-(* Type qualifier: l (default) geometry+tags only; ll adds loose objects;
-   llb adds binding objects; explicit "l" is accepted but redundant *)
-local_stmt     ::= [ set_ref ] "local" [ "l" | "ll" | "llb" ]
-                   [ "->" set_ref ]
+/* Type qualifier: l (default) geometry+tags only; ll adds loose objects;
+   llb adds binding objects; explicit "l" is accepted but redundant */
+local_stmt     ::= set_ref? "local" ( "l" | "ll" | "llb" )?
+                   ( "->" set_ref )?
 
-(* Transforms each element in the input set into a derived element.
-   Zero or more comma-separated assignments. *)
-convert_stmt   ::= [ set_ref ] "convert" derived_type
-                   [ tag_assignment { "," tag_assignment } ]
-                   [ "->" set_ref ]
+/* Transforms each element in the input set into a derived element.
+   Zero or more comma-separated assignments. */
+convert_stmt   ::= set_ref? "convert" derived_type
+                   ( tag_assignment ( "," tag_assignment )* )?
+                   ( "->" set_ref )?
 
-(* Creates a single derived element (not one per input element);
-   no input set — make operates independently of any input set *)
+/* Creates a single derived element (not one per input element);
+   no input set — make operates independently of any input set */
 make_stmt      ::= "make" derived_type
-                   [ tag_assignment { "," tag_assignment } ]
-                   [ "->" set_ref ]
+                   ( tag_assignment ( "," tag_assignment )* )?
+                   ( "->" set_ref )?
 
-(* Special assignment targets in convert/make:
+/* Special assignment targets in convert/make:
      !key              — suppress this key from generic copy
      ::id              — set element ID
      ::geom            — set element geometry
      ::=evaluator      — copy/transform all tags from input element;
                          only valid in convert (parser rejects in make)
      set_name::=eval    — merge a list-represented set into tags;
-                         documented for make, also accepted in convert *)
+                         documented for make, also accepted in convert */
 tag_assignment ::= "!" tag_key
                  | "::id" "=" evaluator
                  | "::geom" "=" evaluator
@@ -296,38 +294,38 @@ tag_assignment ::= "!" tag_key
                  | set_name "::" "=" evaluator
                  | tag_key "=" evaluator
 
-(* Maps elements to their corresponding area objects in the area database *)
-map_to_area_stmt ::= [ set_ref ] "map_to_area" [ "->" set_ref ]
+/* Maps elements to their corresponding area objects in the area database */
+map_to_area_stmt ::= set_ref? "map_to_area" ( "->" set_ref )?
 
-(* Compares query result with the state at the [diff] or [adiff] reference date.
+/* Compares query result with the state at the [diff] or [adiff] reference date.
    Only valid in diff/adiff mode. Optional block executes twice per diff run —
-   once for the old timestamp, once for the new. *)
-compare_stmt   ::= [ set_ref ] "compare"
-                   "(" [ "delta" ":" evaluator ] ")"
-                   [ "->" set_ref ]
-                   [ "{" { statement } "}" ]
+   once for the old timestamp, once for the new. */
+compare_stmt   ::= set_ref? "compare"
+                   "(" ( "delta" ":" evaluator )? ")"
+                   ( "->" set_ref )?
+                   ( "{" statement* "}" )?
 
-(* ----------------------------------------------------------------------- *)
-(* EVALUATORS                                                              *)
-(* ----------------------------------------------------------------------- *)
+/* ----------------------------------------------------------------------- */
+/* EVALUATORS                                                              */
+/* ----------------------------------------------------------------------- */
 
 evaluator      ::= ternary_expr
 
-ternary_expr   ::= or_expr [ "?" or_expr ":" ternary_expr ]
+ternary_expr   ::= or_expr ( "?" or_expr ":" ternary_expr )?
 
-or_expr        ::= and_expr { "||" and_expr }
+or_expr        ::= and_expr ( "||" and_expr )*
 
-and_expr       ::= not_expr { "&&" not_expr }
+and_expr       ::= not_expr ( "&&" not_expr )*
 
 not_expr       ::= "!" not_expr
                  | compare_expr
 
 compare_expr   ::= add_expr
-                   [ ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) add_expr ]
+                   ( ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) add_expr )?
 
-add_expr       ::= mul_expr { ( "+" | "-" ) mul_expr }
+add_expr       ::= mul_expr ( ( "+" | "-" ) mul_expr )*
 
-mul_expr       ::= unary_expr { ( "*" | "/" ) unary_expr }
+mul_expr       ::= unary_expr ( ( "*" | "/" ) unary_expr )*
 
 unary_expr     ::= "-" unary_expr
                  | primary_expr
@@ -335,24 +333,24 @@ unary_expr     ::= "-" unary_expr
 primary_expr   ::= "(" evaluator ")"
                  | number_literal
                  | string_literal
-                 (* Element identity *)
+                 /* Element identity */
                  | "id" "(" ")"
                  | "type" "(" ")"
-                 (* Tag access *)
+                 /* Tag access */
                  | "t" "[" evaluator "]"
                  | "is_tag" "(" tag_key ")"
                  | "keys" "(" ")"
-                 (* Generic tag operator: returns the tag value for the enclosing generic
+                 /* Generic tag operator: returns the tag value for the enclosing generic
                     property key; only valid as the value of a generic property assignment
-                    in convert/make *)
+                    in convert/make */
                  | "::"
-                 (* Object metadata *)
+                 /* Object metadata */
                  | "version" "(" ")"
                  | "timestamp" "(" ")"
                  | "changeset" "(" ")"
                  | "uid" "(" ")"
                  | "user" "(" ")"
-                 (* Element properties *)
+                 /* Element properties */
                  | "count_tags" "(" ")"
                  | "count_members" "(" ")"
                  | "count_distinct_members" "(" ")"
@@ -361,56 +359,56 @@ primary_expr   ::= "(" evaluator ")"
                  | "is_closed" "(" ")"
                  | "lat" "(" ")"
                  | "lon" "(" ")"
-                 (* Geometry *)
+                 /* Geometry */
                  | "geom" "(" ")"
                  | "length" "(" ")"
                  | "center" "(" evaluator ")"
                  | "trace" "(" evaluator ")"
                  | "hull" "(" evaluator ")"
                  | "pt" "(" evaluator "," evaluator ")"
-                 | "lstr" "(" evaluator "," evaluator { "," evaluator } ")"
-                 | "poly" "(" evaluator "," evaluator { "," evaluator } ")"
-                 (* Per-member aggregators *)
+                 | "lstr" "(" evaluator "," evaluator ( "," evaluator )* ")"
+                 | "poly" "(" evaluator "," evaluator ( "," evaluator )* ")"
+                 /* Per-member aggregators */
                  | "per_member" "(" evaluator ")"
                  | "per_vertex" "(" evaluator ")"
-                 (* Member-dependent functions: only valid inside per_member/per_vertex *)
+                 /* Member-dependent functions: only valid inside per_member/per_vertex */
                  | "pos" "(" ")"
                  | "mtype" "(" ")"
                  | "ref" "(" ")"
                  | "role" "(" ")"
                  | "angle" "(" ")"
-                 (* Type conversion *)
+                 /* Type conversion */
                  | "number" "(" evaluator ")"
                  | "date" "(" evaluator ")"
                  | "suffix" "(" evaluator ")"
                  | "abs" "(" evaluator ")"
                  | "is_number" "(" evaluator ")"
                  | "is_date" "(" evaluator ")"
-                 (* Aggregators over an input set; optional set_name (bare, no leading dot)
-                    qualifies the input set — e.g. .roads.count(nodes) is written roads.count(nodes) *)
-                 | [ set_name "." ] "u" "(" evaluator ")"
-                 | [ set_name "." ] "min" "(" evaluator ")"
-                 | [ set_name "." ] "max" "(" evaluator ")"
-                 | [ set_name "." ] "sum" "(" evaluator ")"
-                 | [ set_name "." ] "set" "(" evaluator ")"
-                 | [ set_name "." ] "gcat" "(" evaluator ")"
-                 | [ set_name "." ] "count" "(" count_type ")"
-                 (* List-represented set operators *)
+                 /* Aggregators over an input set; optional set_name (bare, no leading dot)
+                    qualifies the input set — e.g. .roads.count(nodes) is written roads.count(nodes) */
+                 | ( set_name "." )? "u" "(" evaluator ")"
+                 | ( set_name "." )? "min" "(" evaluator ")"
+                 | ( set_name "." )? "max" "(" evaluator ")"
+                 | ( set_name "." )? "sum" "(" evaluator ")"
+                 | ( set_name "." )? "set" "(" evaluator ")"
+                 | ( set_name "." )? "gcat" "(" evaluator ")"
+                 | ( set_name "." )? "count" "(" count_type ")"
+                 /* List-represented set operators */
                  | "lrs_in" "(" evaluator "," evaluator ")"
                  | "lrs_isect" "(" evaluator "," evaluator ")"
                  | "lrs_union" "(" evaluator "," evaluator ")"
                  | "lrs_min" "(" evaluator ")"
                  | "lrs_max" "(" evaluator ")"
-                 (* Set property access: bare set_name (no leading dot) followed by ".val".
+                 /* Set property access: bare set_name (no leading dot) followed by ".val".
                     The set name is mandatory — the default set is not implied.
                     "val" is the only property currently written by any statement
                     (by the for-loop on its output set); the implementation supports
-                    arbitrary names but no other statement uses it. *)
+                    arbitrary names but no other statement uses it. */
                  | set_name "." "val"
 
-(* ----------------------------------------------------------------------- *)
-(* SET REFERENCES                                                          *)
-(* ----------------------------------------------------------------------- *)
+/* ----------------------------------------------------------------------- */
+/* SET REFERENCES                                                          */
+/* ----------------------------------------------------------------------- */
 
 set_ref        ::= "." set_name
 
@@ -420,67 +418,67 @@ set_name       ::= "_"
 count_type     ::= "nodes" | "ways" | "relations" | "deriveds"
                  | "nwr" | "nw" | "wr" | "nr"
 
-(* ----------------------------------------------------------------------- *)
-(* LEXICAL TOKENS                                                          *)
-(* ----------------------------------------------------------------------- *)
+/* ----------------------------------------------------------------------- */
+/* LEXICAL TOKENS                                                          */
+/* ----------------------------------------------------------------------- */
 
-(* Set names: letter or underscore start *)
-set_id         ::= set_id_start { set_id_cont }
-set_id_start   ::= /[A-Za-z_]/
-set_id_cont    ::= /[A-Za-z0-9_]/
+/* Set names: letter or underscore start */
+set_id         ::= set_id_start set_id_cont*
+set_id_start   ::= [A-Za-z_]
+set_id_cont    ::= [A-Za-z0-9_]
 
-(* Derived element type name: must start with a letter (not underscore) *)
-derived_type      ::= derived_type_start { derived_type_cont }
-derived_type_start ::= /[A-Za-z]/
-derived_type_cont  ::= /[A-Za-z0-9_]/
+/* Derived element type name: must start with a letter (not underscore) */
+derived_type      ::= derived_type_start derived_type_cont*
+derived_type_start ::= [A-Za-z]
+derived_type_cont  ::= [A-Za-z0-9_]
 
-(* Tag keys may be quoted (any UTF-8 string) or unquoted (letters, digits, underscore). *)
+/* Tag keys may be quoted (any UTF-8 string) or unquoted (letters, digits, underscore). */
 tag_key        ::= string_literal
                  | unquoted_key
 
-unquoted_key   ::= key_start { key_cont }
-key_start      ::= /[A-Za-z_]/
-key_cont       ::= /[A-Za-z0-9_]/
+unquoted_key   ::= key_start key_cont*
+key_start      ::= [A-Za-z_]
+key_cont       ::= [A-Za-z0-9_]
 
-(* Tag values may be quoted or simple unquoted tokens *)
+/* Tag values may be quoted or simple unquoted tokens */
 tag_value      ::= string_literal
                  | unquoted_value
 
-unquoted_value ::= value_char { value_char }
-value_char     ::= /[A-Za-z0-9_]/
+unquoted_value ::= value_char+
+value_char     ::= [A-Za-z0-9_]
 
-(* String literals: double-quoted or single-quoted, with backslash escapes *)
+/* String literals: double-quoted or single-quoted, with backslash escapes */
 string_literal ::= dquoted_string
                  | squoted_string
 
-dquoted_string ::= '"' { dquote_char } '"'
-dquote_char    ::= /[^"\\]/ | escape_seq
+dquoted_string ::= '"' dquote_char* '"'
+dquote_char    ::= [^"#x5C] | escape_seq
 
-squoted_string ::= "'" { squote_char } "'"
-squote_char    ::= /[^'\\]/ | escape_seq
+squoted_string ::= "'" squote_char* "'"
+squote_char    ::= [^'#x5C] | escape_seq
 
-(* Escape sequences in quoted strings *)
+/* Escape sequences in quoted strings */
 escape_seq     ::= "\\" ( "n" | "t" | '"' | "'" | "\\" )
                  | "\\u" hex_digit hex_digit hex_digit hex_digit
 
-hex_digit      ::= /[0-9A-Fa-f]/
+hex_digit      ::= [0-9A-Fa-f]
 
 boolean_literal ::= "true" | "false"
 
-(* Non-negative integer (e.g. IDs, timeouts, limits) *)
-integer        ::= digit { digit }
+/* Non-negative integer (e.g. IDs, timeouts, limits) */
+integer        ::= digit+
 
-(* Signed decimal number (e.g. coordinates) *)
-number         ::= [ "-" ] unsigned_number
+/* Signed decimal number (e.g. coordinates) */
+number         ::= "-"? unsigned_number
 
-unsigned_number ::= digit { digit } [ "." { digit } ] [ "e" [ "+" | "-" ] digit { digit } ]
-                  | "." digit { digit } [ "e" [ "+" | "-" ] digit { digit } ]
+unsigned_number ::= digit+ ( "." digit* )? ( "e" ( "+" | "-" )? digit+ )?
+                  | "." digit+ ( "e" ( "+" | "-" )? digit+ )?
 
 number_literal ::= unsigned_number
 
-digit          ::= /[0-9]/
+digit          ::= [0-9]
 
-(* ISO 8601 UTC datetime, double- or single-quoted, in the form "YYYY-MM-DDTHH:mm:ssZ", e.g. "2015-10-28T19:20:00Z" *)
+/* ISO 8601 UTC datetime, double- or single-quoted, in the form "YYYY-MM-DDTHH:mm:ssZ", e.g. "2015-10-28T19:20:00Z" */
 datetime_literal ::= '"' date_digits "T" time_digits "Z" '"'
                    | "'" date_digits "T" time_digits "Z" "'"
 
@@ -488,13 +486,13 @@ date_digits    ::= digit digit digit digit "-" digit digit "-" digit digit
 
 time_digits    ::= digit digit ":" digit digit ":" digit digit
 
-(* ----------------------------------------------------------------------- *)
-(* IGNORED TOKENS (whitespace and comments)                                *)
-(* ----------------------------------------------------------------------- *)
+/* ----------------------------------------------------------------------- */
+/* IGNORED TOKENS (whitespace and comments)                                */
+/* ----------------------------------------------------------------------- */
 
-whitespace     ::= /[ \t\n\r]/ { /[ \t\n\r]/ }
+whitespace     ::= [#x20#x9#xA#xD]+
 
-line_comment   ::= "//" { /[^\n]/ }
+line_comment   ::= "//" [^#xA]*
 
 block_comment  ::= "/*" block_comment_body "*/"
-block_comment_body ::= { /[^*]/ | "*" /[^/]/ }
+block_comment_body ::= ( [^*] | "*" [^/] )*
