@@ -16,6 +16,10 @@ Paste the contents of `overpassql.ebnf` into the [Railroad Diagram Generator](ht
 
 Transformations to other EBNF-like grammars should be relatively straightforward if you plan to use a different parser implementation.
 
+## How not to use it
+
+Please do not use this grammar to abuse public Overpass servers by sending large volumes of automated queries. If you have a use case that depends on a lot of Overpass traffic, consider running your own local Overpass instance using [the original source code](https://github.com/drolbr/overpass-api) or [one of the container images](https://github.com/b1tw153/overpass-api#installation).
+
 ## Scope and accuracy
 
 The grammar covers features documented in the [Overpass QL wiki](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL). The wiki is not always reliable, so the grammar has been verified against the Overpass API source code and tested against a live instance running v0.7.62.11. Features accepted by the implementation but absent from the wiki are excluded.
