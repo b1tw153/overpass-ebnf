@@ -158,9 +158,9 @@ recurse_filter ::= "(" recurse_type set_ref? ( ":" string_literal )? ")"
 
 recurse_type   ::= "w" | "r" | "bn" | "bw" | "br"
 
-way_count_filter ::= "(" "way_cnt" ":" int_range ")"
+way_count_filter ::= "(" "way_cnt" set_ref? ":" int_range ")"
 
-way_link_filter  ::= "(" "way_link" ":" int_range ")"
+way_link_filter  ::= "(" "way_link" set_ref? ":" int_range ")"
 
 int_range      ::= integer ( "-" integer? )?
 
