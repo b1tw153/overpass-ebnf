@@ -63,6 +63,7 @@ statement      ::= simple_stmt ";"
 
 simple_stmt    ::= query_stmt
                  | union_stmt
+                 | difference_stmt
                  | item_stmt
                  | out_stmt
                  | recurse_stmt
@@ -199,12 +200,9 @@ retro_stmt     ::= "retro" "(" evaluator ")"
 /* OTHER STATEMENTS                                                        */
 /* ----------------------------------------------------------------------- */
 
-union_stmt     ::= "(" union_body ")" ( "->" set_ref )?
+union_stmt     ::= "(" statement* ")" ( "->" set_ref )?
 
-union_body     ::= union_member*
-
-union_member   ::= statement
-                 | "-" statement
+difference_stmt ::= "(" statement "-" statement ")" ( "->" set_ref )?
 
 item_stmt      ::= set_ref ( "->" set_ref )?
 
