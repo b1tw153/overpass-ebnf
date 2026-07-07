@@ -19,8 +19,8 @@ query    ::= ( ( '[' global_setting ']' )+ ';' )? statement*
 /* GLOBAL SETTINGS                                                         */
 /* ----------------------------------------------------------------------- */
 
-global_setting ::= "timeout" ":" integer
-                 | "maxsize" ":" integer
+global_setting ::= "timeout" ":" integer_with_suffix
+                 | "maxsize" ":" integer_with_suffix
                  | "out" ":" output_format
                  | "bbox" ":" number "," number "," number "," number
                  | "date" ":" datetime_literal
@@ -409,6 +409,10 @@ datetime_literal ::= '"' date_digits "T" time_digits "Z" '"'
 date_digits    ::= digit digit digit digit "-" digit digit "-" digit digit
 
 time_digits    ::= digit digit ":" digit digit ":" digit digit
+
+integer_suffix ::=  "ki" | "Mi" | "Gi" | "k" | "M" | "G"
+
+integer_with_suffix ::= integer integer_suffix?
 
 /* ----------------------------------------------------------------------- */
 /* IGNORED TOKENS (whitespace and comments)                                */
