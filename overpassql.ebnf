@@ -81,6 +81,8 @@ block_stmt     ::= foreach_stmt
                  | if_stmt
                  | retro_stmt
 
+/* The Overpass API implementation limits statement nesting to 1023 levels */
+
 /* ----------------------------------------------------------------------- */
 /* QUERY STATEMENT                                                         */
 /* ----------------------------------------------------------------------- */
