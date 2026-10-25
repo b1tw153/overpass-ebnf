@@ -59,7 +59,7 @@ csv_builtin_name     ::= unquoted_csv_builtin
 /* ----------------------------------------------------------------------- */
 
 statement      ::= simple_stmt ";"
-                 | block_stmt
+                 | block_stmt ";"?
 
 simple_stmt    ::= query_stmt
                  | union_stmt
@@ -80,6 +80,7 @@ block_stmt     ::= foreach_stmt
                  | complete_stmt
                  | if_stmt
                  | retro_stmt
+                 | compare_block_stmt
 
 /* The Overpass API implementation limits statement nesting to 1023 levels */
 
@@ -120,9 +121,9 @@ tag_filter     ::= "[" tag_key "]"
                  | "[" "!" tag_key "]"
                  | "[" tag_key "=" tag_value "]"
                  | "[" tag_key "!=" tag_value "]"
-                 | "[" tag_key "~" string_literal ( "," "i" )? "]"
-                 | "[" tag_key "!~" string_literal ( "," "i" )? "]"
-                 | "[" "~" string_literal "~" string_literal ( "," "i" )? "]"
+                 | "[" tag_key "~" tag_value ( "," "i" )? "]"
+                 | "[" tag_key "!~" tag_value ( "," "i" )? "]"
+                 | "[" "~" tag_key "~" tag_value ( "," "i" )? "]"
 
 bbox_filter    ::= "(" number "," number "," number "," number ")"
 
@@ -130,7 +131,9 @@ id_filter      ::= "(" integer ")"
                  | "(" "id" ":" integer ( "," integer )* ")"
 
 around_set_filter   ::= "(" "around" set_ref? ":" unsigned_number ")"
+
 around_point_filter ::= "(" "around" ":" unsigned_number "," number "," number ")"
+
 around_line_filter  ::= "(" "around" ":" unsigned_number
                          "," number "," number
                          "," number "," number
@@ -157,9 +160,19 @@ area_set_filter ::= "(" "area" set_ref? ")"
 
 area_id_filter  ::= "(" "area" ":" integer ")"
 
-recurse_filter ::= "(" recurse_type set_ref? ( ":" string_literal )? ")"
+recurse_filter       ::= role_recurse_filter
+                       | way_recurse_filter
+                       | arrow_recurse_filter
 
-recurse_type   ::= "w" | "r" | "bn" | "bw" | "br"
+role_recurse_filter  ::= "(" role_recurse_type set_ref? ( ":" string_literal )? ")"
+
+way_recurse_filter   ::= "(" "w" set_ref? ( ":" way_position ( "," way_position )* )? ")"
+
+arrow_recurse_filter ::= "(" ( "<" | "<<" | ">" | ">>" ) ")"
+
+role_recurse_type    ::= "r" | "bn" | "bw" | "br"
+
+way_position         ::= "-"? digit+
 
 way_count_filter ::= "(" "way_cnt" set_ref? ":" int_range ")"
 
@@ -178,7 +191,7 @@ if_filter      ::= "(" "if" ":" evaluator ")"
 /* ----------------------------------------------------------------------- */
 
 block_body     ::= "{" statement* "}"
-                 | "(" statement* ")"
+                 | "(" statement* ")"   /* deprecated */
 
 foreach_stmt   ::= "foreach" set_ref? ( "->" set_ref )?
                    block_body
@@ -187,9 +200,14 @@ for_stmt       ::= "for" set_ref? ( "->" set_ref )?
                    "(" evaluator ")"
                    block_body
 
-complete_stmt  ::= "complete" set_ref? ( "->" set_ref )?
-                   ( "(" integer ")" )?
-                   "{" statement* "}"
+complete_stmt  ::= "complete" complete_head block_body
+                 | "complete" "{" statement* "}"
+
+complete_head  ::= "(" integer ")" complete_sets?
+                 | complete_sets
+
+complete_sets  ::= set_ref ( "->" set_ref )?
+                 | "->" set_ref
 
 if_stmt        ::= "if" "(" evaluator ")"
                    block_body
@@ -255,10 +273,11 @@ generic_tag_expr ::= "::"
 
 map_to_area_stmt ::= set_ref? "map_to_area" ( "->" set_ref )?
 
-compare_stmt   ::= set_ref? "compare"
-                   "(" ( "delta" ":" evaluator )? ")"
-                   ( "->" set_ref )?
-                   ( "{" statement* "}" )?
+compare_stmt       ::= set_ref? "compare"
+                       "(" ( "delta" ":" evaluator )? ")"
+                       ( "->" set_ref )?
+
+compare_block_stmt ::= compare_stmt block_body
 
 /* ----------------------------------------------------------------------- */
 /* EVALUATORS                                                              */
@@ -339,7 +358,7 @@ primary_expr   ::= "(" evaluator ")"
                  | "lrs_union" "(" evaluator "," evaluator ")"
                  | "lrs_min" "(" evaluator ")"
                  | "lrs_max" "(" evaluator ")"
-                 | set_name "." "val"
+                 | set_name "." property_name
 
 /* ----------------------------------------------------------------------- */
 /* SET REFERENCES                                                          */
@@ -360,6 +379,10 @@ count_type     ::= "nodes" | "ways" | "relations" | "deriveds"
 set_id         ::= set_id_start set_id_cont*
 set_id_start   ::= [A-Za-z_]
 set_id_cont    ::= [A-Za-z0-9_]
+
+property_name  ::= property_start property_cont*
+property_start ::= [A-Za-z_]
+property_cont  ::= [A-Za-z0-9_]
 
 derived_type      ::= derived_type_start derived_type_cont*
 derived_type_start ::= [A-Za-z]
@@ -387,8 +410,8 @@ dquote_char    ::= [^"#x5C] | escape_seq
 squoted_string ::= "'" squote_char* "'"
 squote_char    ::= [^'#x5C] | escape_seq
 
-escape_seq     ::= "\\" ( "n" | "t" | '"' | "'" | "\\" )
-                 | "\\u" hex_digit hex_digit hex_digit hex_digit
+escape_seq     ::= #x5C [^u]
+                 | #x5C "u" hex_digit ( hex_digit ( hex_digit hex_digit? )? )?
 
 hex_digit      ::= [0-9A-Fa-f]
 
@@ -424,5 +447,5 @@ whitespace     ::= [#x20#x9#xA#xD]+
 
 line_comment   ::= "//" [^#xA]*
 
-block_comment  ::= "/*" block_comment_body "*/"
-block_comment_body ::= ( [^*] | "*" [^/] )*
+block_comment      ::= "/*" block_comment_body "*"+ "/"
+block_comment_body ::= ( [^*] | "*"+ [^*/] )*
