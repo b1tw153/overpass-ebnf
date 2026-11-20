@@ -19,8 +19,8 @@ query    ::= ( ( '[' global_setting ']' )+ ';' )? statement*
 /* GLOBAL SETTINGS                                                         */
 /* ----------------------------------------------------------------------- */
 
-global_setting ::= "timeout" ":" integer_with_suffix
-                 | "maxsize" ":" integer_with_suffix
+global_setting ::= "timeout" ":" positive_integer integer_suffix?
+                 | "maxsize" ":" positive_integer integer_suffix?
                  | "out" ":" output_format
                  | "bbox" ":" number "," number "," number "," number
                  | "date" ":" datetime_literal
@@ -238,6 +238,7 @@ retro_stmt     ::= "retro" "(" evaluator ")"
 
 union_stmt     ::= "(" result_stmt* ")" ( "->" set_ref )?
 
+/* The implementation rejects "-." directly after the first statement. */
 difference_stmt ::= "(" result_stmt "-" result_stmt ")" ( "->" set_ref )?
 
 item_stmt      ::= set_ref ( "->" set_ref )?
@@ -337,8 +338,8 @@ primary_expr   ::= "(" evaluator ")"
                  | "count_tags" "(" ")"
                  | "count_members" "(" ")"
                  | "count_distinct_members" "(" ")"
-                 | "count_by_role" "(" evaluator ")"
-                 | "count_distinct_by_role" "(" evaluator ")"
+                 | "count_by_role" "(" role ")"
+                 | "count_distinct_by_role" "(" role ")"
                  | "is_closed" "(" ")"
                  | "lat" "(" ")"
                  | "lon" "(" ")"
@@ -427,6 +428,11 @@ tag_value      ::= string_literal
 unquoted_value ::= value_char+
 value_char     ::= [A-Za-z0-9_]
 
+role           ::= string_literal
+                 | unquoted_role
+
+unquoted_role  ::= [A-Za-z_][A-Za-z0-9_]*
+
 string_literal ::= dquoted_string
                  | squoted_string
 
@@ -451,6 +457,8 @@ way_position   ::= "-"? positive_integer
 
 number         ::= "-"? unsigned_number
 
+/* The implementation rejects or misreads a number that starts with "."
+   unless a "-" precedes it. It also rejects "+" after the exponent. */
 unsigned_number ::= digit+ ( "." digit* )? ( "e" ( "+" | "-" )? digit+ )?
                   | "." digit+ ( "e" ( "+" | "-" )? digit+ )?
 
@@ -464,8 +472,6 @@ date_digits    ::= digit digit digit digit "-" digit digit "-" digit digit
 time_digits    ::= digit digit ":" digit digit ":" digit digit
 
 integer_suffix ::=  "ki" | "Mi" | "Gi" | "k" | "M" | "G"
-
-integer_with_suffix ::= integer integer_suffix?
 
 /* ----------------------------------------------------------------------- */
 /* IGNORED TOKENS (whitespace and comments)                                */
