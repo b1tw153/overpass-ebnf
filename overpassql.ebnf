@@ -177,8 +177,6 @@ arrow_recurse_filter ::= "(" ( "<" | "<<" | ">" | ">>" ) ")"
 
 role_recurse_type    ::= "r" | "bn" | "bw" | "br"
 
-way_position         ::= "-"? digit+
-
 way_count_filter ::= "(" "way_cnt" set_ref? ":" int_range ")"
 
 way_link_filter  ::= "(" "way_link" set_ref? ":" int_range ")"
@@ -303,12 +301,15 @@ add_expr       ::= mul_expr ( ( "+" | "-" ) mul_expr )*
 
 mul_expr       ::= unary_expr ( ( "*" | "/" ) unary_expr )*
 
-unary_expr     ::= "-" unary_expr
-                 | "!" unary_expr
+/* A minus sign that touches a digit is part of the number, so "-2.50" is a
+   number and "- 2.50" is a negation. After an operand, "-2" is a binary minus
+   followed by the number 2. */
+unary_expr     ::= "-" "!"? primary_expr
+                 | "!" primary_expr
                  | primary_expr
 
 primary_expr   ::= "(" evaluator ")"
-                 | number_literal
+                 | number
                  | string_literal
                  | "id" "(" ")"
                  | "type" "(" ")"
@@ -379,6 +380,9 @@ count_type     ::= "nodes" | "ways" | "relations" | "deriveds"
 /* LEXICAL TOKENS                                                          */
 /* ----------------------------------------------------------------------- */
 
+/* Rules in this section are tokens. Ignored tokens cannot appear inside
+   them. */
+
 set_id         ::= set_id_start set_id_cont*
 set_id_start   ::= [A-Za-z_]
 set_id_cont    ::= [A-Za-z0-9_]
@@ -430,12 +434,12 @@ integer        ::= digit+
 
 positive_integer ::= digit* [1-9] digit*
 
+way_position   ::= "-"? positive_integer
+
 number         ::= "-"? unsigned_number
 
 unsigned_number ::= digit+ ( "." digit* )? ( "e" ( "+" | "-" )? digit+ )?
                   | "." digit+ ( "e" ( "+" | "-" )? digit+ )?
-
-number_literal ::= unsigned_number
 
 digit          ::= [0-9]
 
