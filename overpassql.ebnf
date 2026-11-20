@@ -278,12 +278,13 @@ make_stmt      ::= "make" derived_type
                    ( "->" set_ref )?
 
 convert_tag_assignment ::= make_tag_assignment
+                         | set_name generic_tag_expr "=" generic_tag_expr
                          | generic_tag_expr "=" ( generic_tag_expr | evaluator )
 
 make_tag_assignment ::= "!" tag_key
                       | "::id" "=" evaluator
                       | "::geom" "=" evaluator
-                      | set_name generic_tag_expr "=" (generic_tag_expr | evaluator )
+                      | set_name generic_tag_expr "=" evaluator
                       | tag_key "=" evaluator
 
 generic_tag_expr ::= "::"
