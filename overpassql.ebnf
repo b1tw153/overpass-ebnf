@@ -82,12 +82,17 @@ block_stmt     ::= foreach_stmt
                  | retro_stmt
                  | compare_block_stmt
 
-/* The Overpass API implementation limits statement nesting to 1023 levels */
+/* The Overpass API implementation limits statement nesting to a depth of
+   1023. Union, difference, foreach and for each add 2 to the depth. Every
+   other block statement adds 1. So at most 511 unions can nest. */
 
 /* ----------------------------------------------------------------------- */
 /* QUERY STATEMENT                                                         */
 /* ----------------------------------------------------------------------- */
 
+/* The implementation rejects a query statement that has no filter, unless a
+   valid bbox setting applies. A tag filter with an empty value does not count
+   as a filter. */
 query_stmt     ::= element_type filter* ( "->" set_ref )?
 
 element_type   ::= "node" | "way" | "rel" | "relation"
@@ -123,7 +128,7 @@ tag_filter     ::= "[" tag_key "]"
                  | "[" tag_key "!=" tag_value "]"
                  | "[" tag_key "~" tag_value ( "," "i" )? "]"
                  | "[" tag_key "!~" tag_value ( "," "i" )? "]"
-                 | "[" "~" tag_key "~" tag_value ( "," "i" )? "]"
+                 | "[" "~" key_regex "~" tag_value ( "," "i" )? "]"
 
 bbox_filter    ::= "(" number "," number "," number "," number ")"
 
@@ -141,8 +146,8 @@ around_line_filter  ::= "(" "around" ":" unsigned_number
 
 polygon_filter ::= "(" "poly" ":" poly_string ")"
 
-poly_string    ::= '"' poly_vertex+ '"'
-                 | "'" poly_vertex+ "'"
+poly_string    ::= '"' poly_vertex poly_vertex poly_vertex poly_vertex* '"'
+                 | "'" poly_vertex poly_vertex poly_vertex poly_vertex* "'"
 
 poly_vertex    ::= number number
 
@@ -152,13 +157,13 @@ changed_filter ::= "(" "changed" ":" datetime_literal
                    ( "," datetime_literal )? ")"
 
 user_filter    ::= "(" "user" ":" string_literal ( "," string_literal )* ")"
-                 | "(" "uid" ":" integer ( "," integer )* ")"
+                 | "(" "uid" ":" positive_integer ( "," positive_integer )* ")"
                  | "(" "user_touched" ":" string_literal ( "," string_literal )* ")"
-                 | "(" "uid_touched" ":" integer ( "," integer )* ")"
+                 | "(" "uid_touched" ":" positive_integer ( "," positive_integer )* ")"
 
 area_set_filter ::= "(" "area" set_ref? ")"
 
-area_id_filter  ::= "(" "area" ":" integer ")"
+area_id_filter  ::= "(" "area" ":" positive_integer ")"
 
 recurse_filter       ::= role_recurse_filter
                        | way_recurse_filter
@@ -285,14 +290,11 @@ compare_block_stmt ::= compare_stmt block_body
 
 evaluator      ::= ternary_expr
 
-ternary_expr   ::= or_expr ( "?" or_expr ":" ternary_expr )?
+ternary_expr   ::= or_expr ( "?" or_expr ":" or_expr )*
 
 or_expr        ::= and_expr ( "||" and_expr )*
 
-and_expr       ::= not_expr ( "&&" not_expr )*
-
-not_expr       ::= "!" not_expr
-                 | compare_expr
+and_expr       ::= compare_expr ( "&&" compare_expr )*
 
 compare_expr   ::= add_expr
                    ( ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) add_expr )?
@@ -302,6 +304,7 @@ add_expr       ::= mul_expr ( ( "+" | "-" ) mul_expr )*
 mul_expr       ::= unary_expr ( ( "*" | "/" ) unary_expr )*
 
 unary_expr     ::= "-" unary_expr
+                 | "!" unary_expr
                  | primary_expr
 
 primary_expr   ::= "(" evaluator ")"
@@ -388,8 +391,14 @@ derived_type      ::= derived_type_start derived_type_cont*
 derived_type_start ::= [A-Za-z]
 derived_type_cont  ::= [A-Za-z0-9_]
 
-tag_key        ::= string_literal
+tag_key        ::= nonempty_string_literal
                  | unquoted_key
+
+key_regex      ::= string_literal
+                 | unquoted_key
+
+nonempty_string_literal ::= '"' dquote_char+ '"'
+                          | "'" squote_char+ "'"
 
 unquoted_key   ::= key_start key_cont*
 key_start      ::= [A-Za-z_]
@@ -418,6 +427,8 @@ hex_digit      ::= [0-9A-Fa-f]
 boolean_literal ::= "true" | "false"
 
 integer        ::= digit+
+
+positive_integer ::= digit* [1-9] digit*
 
 number         ::= "-"? unsigned_number
 
