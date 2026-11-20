@@ -34,8 +34,12 @@ output_format  ::= "xml"
                  | "popup" ( "(" popup_config ")" )*
 
 /* See: https://dev.overpass-api.de/output_formats.html */
-popup_config   ::= popup_token ( ";" popup_token )* ";"?
-popup_token    ::= ( string_literal | [^;)"'] )*
+popup_config   ::= popup_title ";" ( popup_filter ";" )* ( tag_key ";" )?
+
+popup_filter   ::= "[" tag_key ( ( "=" | "!=" | "~" | "!~" ) tag_value )? "]"
+
+popup_title    ::= string_literal
+                 | unquoted_popup_title
 
 csv_spec       ::= csv_field ( "," csv_field )*
                    ( ";" boolean_literal ( ";" string_literal )? )?
@@ -433,6 +437,8 @@ role           ::= string_literal
                  | unquoted_role
 
 unquoted_role  ::= [A-Za-z_][A-Za-z0-9_]*
+
+unquoted_popup_title ::=[A-Za-z_][A-Za-z0-9_]*
 
 string_literal ::= dquoted_string
                  | squoted_string
