@@ -58,29 +58,31 @@ csv_builtin_name     ::= unquoted_csv_builtin
 /* STATEMENTS                                                              */
 /* ----------------------------------------------------------------------- */
 
-statement      ::= simple_stmt ";"
-                 | block_stmt ";"?
+statement      ::= result_stmt
+                 | out_stmt ";"
+                 | if_stmt ";"?
+                 | retro_stmt ";"?
 
-simple_stmt    ::= query_stmt
-                 | union_stmt
-                 | difference_stmt
-                 | item_stmt
-                 | out_stmt
-                 | recurse_stmt
-                 | is_in_stmt
-                 | timeline_stmt
-                 | local_stmt
-                 | convert_stmt
-                 | make_stmt
-                 | map_to_area_stmt
-                 | compare_stmt
+result_stmt    ::= result_simple_stmt ";"
+                 | result_block_stmt ";"?
 
-block_stmt     ::= foreach_stmt
-                 | for_stmt
-                 | complete_stmt
-                 | if_stmt
-                 | retro_stmt
-                 | compare_block_stmt
+result_simple_stmt ::= query_stmt
+                     | union_stmt
+                     | difference_stmt
+                     | item_stmt
+                     | recurse_stmt
+                     | is_in_stmt
+                     | timeline_stmt
+                     | local_stmt
+                     | convert_stmt
+                     | make_stmt
+                     | map_to_area_stmt
+                     | compare_stmt
+
+result_block_stmt  ::= foreach_stmt
+                     | for_stmt
+                     | complete_stmt
+                     | compare_block_stmt
 
 /* The Overpass API implementation limits statement nesting to a depth of
    1023. Union, difference, foreach and for each add 2 to the depth. Every
@@ -93,19 +95,28 @@ block_stmt     ::= foreach_stmt
 /* The implementation rejects a query statement that has no filter, unless a
    valid bbox setting applies. A tag filter with an empty value does not count
    as a filter. */
-query_stmt     ::= element_type filter* ( "->" set_ref )?
+query_stmt     ::= typed_query ( "->" set_ref )?
 
-element_type   ::= "node" | "way" | "rel" | "relation"
-                 | "nwr" | "nw" | "wr" | "nr"
-                 | "area" | "derived"
+typed_query    ::= "node" ( element_filter | member_filter
+                          | way_recurse_filter | way_count_filter
+                          | way_link_filter )*
+                 | "way" ( element_filter | member_filter | way_parent_filter )*
+                 | ( "rel" | "relation" )
+                   ( element_filter | member_filter | relation_parent_filter )*
+                 | ( "nwr" | "nw" | "nr" ) ( element_filter | member_filter )*
+                 | "wr" ( element_filter | member_filter | mixed_parent_filter )*
+                 | "area" element_filter*
+                 | "derived" filter*
 
 /* ----------------------------------------------------------------------- */
 /* QUERY FILTERS                                                           */
 /* ----------------------------------------------------------------------- */
 
+element_filter ::= filter
+                 | id_filter
+
 filter         ::= tag_filter
                  | bbox_filter
-                 | id_filter
                  | around_set_filter
                  | around_point_filter
                  | around_line_filter
@@ -115,9 +126,7 @@ filter         ::= tag_filter
                  | user_filter
                  | area_set_filter
                  | area_id_filter
-                 | recurse_filter
-                 | way_count_filter
-                 | way_link_filter
+                 | arrow_recurse_filter
                  | set_filter
                  | pivot_filter
                  | if_filter
@@ -132,8 +141,8 @@ tag_filter     ::= "[" tag_key "]"
 
 bbox_filter    ::= "(" number "," number "," number "," number ")"
 
-id_filter      ::= "(" integer ")"
-                 | "(" "id" ":" integer ( "," integer )* ")"
+id_filter      ::= "(" positive_integer ")"
+                 | "(" "id" ":" positive_integer ( "," positive_integer )* ")"
 
 around_set_filter   ::= "(" "around" set_ref? ":" unsigned_number ")"
 
@@ -165,17 +174,21 @@ area_set_filter ::= "(" "area" set_ref? ")"
 
 area_id_filter  ::= "(" "area" ":" positive_integer ")"
 
-recurse_filter       ::= role_recurse_filter
-                       | way_recurse_filter
-                       | arrow_recurse_filter
+member_filter          ::= "(" "r" set_ref? ( ":" string_literal )? ")"
 
-role_recurse_filter  ::= "(" role_recurse_type set_ref? ( ":" string_literal )? ")"
+way_recurse_filter     ::= "(" "w" set_ref? ( ":" way_position ( "," way_position )* )? ")"
 
-way_recurse_filter   ::= "(" "w" set_ref? ( ":" way_position ( "," way_position )* )? ")"
+way_parent_filter      ::= "(" "bn" set_ref? ( ":" position_list )? ")"
 
-arrow_recurse_filter ::= "(" ( "<" | "<<" | ">" | ">>" ) ")"
+relation_parent_filter ::= "(" ( "bn" | "bw" | "br" ) set_ref?
+                           ( ":" string_literal )? ")"
 
-role_recurse_type    ::= "r" | "bn" | "bw" | "br"
+mixed_parent_filter    ::= "(" "bn" set_ref? ")"
+
+position_list          ::= '"' ( way_position ( "," way_position )* )? '"'
+                         | "'" ( way_position ( "," way_position )* )? "'"
+
+arrow_recurse_filter   ::= "(" ( "<" | "<<" | ">" | ">>" ) ")"
 
 way_count_filter ::= "(" "way_cnt" set_ref? ":" int_range ")"
 
@@ -223,9 +236,9 @@ retro_stmt     ::= "retro" "(" evaluator ")"
 /* OTHER STATEMENTS                                                        */
 /* ----------------------------------------------------------------------- */
 
-union_stmt     ::= "(" statement* ")" ( "->" set_ref )?
+union_stmt     ::= "(" result_stmt* ")" ( "->" set_ref )?
 
-difference_stmt ::= "(" statement "-" statement ")" ( "->" set_ref )?
+difference_stmt ::= "(" result_stmt "-" result_stmt ")" ( "->" set_ref )?
 
 item_stmt      ::= set_ref ( "->" set_ref )?
 
